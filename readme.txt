@@ -5,4 +5,4 @@ Git tracks changes.
 Git ddd 123
 zhangying
 Hello World!
-This is newBranch !
+This is newBranch a simple!
