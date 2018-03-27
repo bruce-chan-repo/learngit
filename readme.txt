@@ -5,4 +5,8 @@ Git tracks changes.
 Git ddd 123
 zhangying
 Hello World!
-This is newBranch a simple!
+<<<<<<< HEAD
+This is featirel!
+=======
+This is featurel!
+>>>>>>> featurel
