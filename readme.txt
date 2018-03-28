@@ -8,3 +8,4 @@ Hello World!
 This is featirel!
 Git is powerfull！
 Add merge
+Delete line
