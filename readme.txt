@@ -7,3 +7,4 @@ zhangying!
 Hello World!
 This is featirel!
 Git is powerfull！
+Add master
