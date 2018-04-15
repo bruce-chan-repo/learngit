@@ -1,0 +1,87 @@
+﻿BEGIN
+	## 处理自服务导入人员时的职级问题
+	DECLARE i int;																		
+	DECLARE maxLevelCount int DEFAULT 200;				-- 控制最多多少个职级，默认200
+	DECLARE exeSql VARCHAR(500) DEFAULT "";				-- 批量执行的sql
+	DECLARE exeValues VARCHAR(500) DEFAULT "";		-- 批量执行的values
+
+	SELECT COUNT(1) INTO @addLevelCount FROM `qihua_import_assist` a
+	WHERE	NOT EXISTS(
+		SELECT
+			1
+		FROM
+			qihua_leveldict b
+		WHERE 
+			b.compid = compId
+		AND 
+			a.`level` = b.levelName
+	)
+	AND a.compId = compId
+	AND (a.`level` != '' OR a.`level` IS NULL);
+
+	-- 查询现有的职级数量
+	SELECT COUNT(1) INTO @levelCount FROM qihua_leveldict WHERE CompID = compId;
+
+	SET i = 0;
+	
+	IF @addLevelCount > 0 THEN
+		SELECT IFNULL(MAX(l.levelId), 0) + 1 INTO @nextLevelId FROM qihua_leveldict l WHERE l.CompID = compId;				-- 职级编号
+		SELECT IFNULL(MAX(l.SortOrder), 0) + 1 INTO @nextSortOrder FROM qihua_leveldict l WHERE l.CompID = compId;		-- 职级排序值
+
+		-- i < (如果新添加职级数量大于剩余控制的数量的话，就使用剩余的数量).
+		WHILE i < (IF(@addLevelCount > (maxLevelCount - @levelCount), (maxLevelCount - @levelCount), @addLevelCount)) DO
+			SET i = i + 1;
+
+			SELECT 
+				level INTO @tempLevelName																																									-- 职级名称
+			FROM
+			(
+				SELECT
+					level,
+					@rowNum:= @rowNum + 1 as rowNum
+				FROM
+					(
+						SELECT
+							a.`level`,
+							@rowNum:= 0
+						FROM
+							`qihua_import_assist` a 
+						WHERE
+							NOT EXISTS (
+								SELECT
+									1
+								FROM
+									qihua_leveldict b
+								WHERE
+									b.compid = compId
+								AND a.`level` = b.levelName
+							)
+						AND a.compId = compId
+						AND (
+							a.`level` != ''
+							OR a.`level` IS NULL
+						)
+					) c
+			) d
+			WHERE rowNum = i;
+
+			-- 构建values
+			SET exeValues = CONCAT(exeValues, ",(", compId, ",", @nextLevelId, ",'", @tempLevelName, "','", NOW(), "', '',", @nextSortOrder, ")");
+
+			SET @nextLevelId = @nextLevelId + 1;
+			SET @nextSortOrder = @nextSortOrder + 1;
+		END WHILE;
+	END IF;
+
+	IF LENGTH(exeValues) > 0 THEN
+		SET @exeValues = SUBSTRING(exeValues, 2);
+		SET @exeSql = CONCAT("INSERT INTO qihua_leveldict VALUES ", @exeValues);
+
+		SELECT @exeSql;
+
+		-- 执行批量添加职级
+		PREPARE stmt FROM @exeSql;
+		EXECUTE stmt;
+    DEALLOCATE PREPARE stmt;
+	END IF;
+END

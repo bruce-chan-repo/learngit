@@ -1,0 +1,46 @@
+BEGIN
+	DECLARE allDeptIds VARCHAR(256) DEFAULT "";	 	-- 所有需要删除的部门编号
+	DECLARE allUserIds VARCHAR(555) DEFAULT "";		-- 所有需要删除的用户编号
+	DECLARE tempUserIds VARCHAR(555) DEFAULT "";	-- 临时存储的部门编号
+	
+	-- 获取当前部门编号
+	SELECT
+		GROUP_CONCAT(DeptID) INTO tempUserIds
+	FROM
+		qihua_department
+	WHERE
+		CompID = companyId
+	AND Deptname = departmentName
+	AND parentId = 0;
+	
+	SET allDeptIds = tempUserIds;
+	
+  -- 递归获取所有子部门编号
+	WHILE LENGTH(tempUserIds) > 0 DO
+		SELECT
+			GROUP_CONCAT(DeptID) INTO tempUserIds
+		FROM
+			qihua_department
+		WHERE
+			FIND_IN_SET(parentId,tempUserIds);
+		
+		IF tempUserIds IS NULL THEN
+			SET tempUserIds = "";
+		ELSE
+			SET allDeptIds = CONCAT(allDeptIds, ",", tempUserIds); 
+		END IF;
+	END WHILE;
+	
+	-- 获取所有需要删除的用户编号
+	SELECT GROUP_CONCAT(UserID) INTO allUserIds FROM qihua_employees WHERE FIND_IN_SET(deptId, allDeptIds);
+
+	SELECT allDeptIds;
+	SELECT allUserIds;
+	
+	-- 执行删除语句
+	DELETE FROM qihua_userinfo WHERE FIND_IN_SET(UserID, allUserIds);
+	DELETE FROM qihua_employees WHERE FIND_IN_SET(deptId, allDeptIds);
+	DELETE FROM qihua_department WHERE FIND_IN_SET(deptId, allDeptIds);
+	
+	SELECT "清除成功";
+END

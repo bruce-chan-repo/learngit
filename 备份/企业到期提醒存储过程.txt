@@ -1,0 +1,63 @@
+BEGIN
+	#Routine body goes here...
+	DECLARE compid int default 0;
+	DECLARE table_num int ;
+  DECLARE days int;
+  DECLARE Done int default 0;
+	DECLARE table_name VARCHAR(255);
+	DECLARE test int default 0;
+	DECLARE compname VARCHAR(255);
+	DECLARE cursor_data CURSOR FOR SELECT t.CompID,	CONCAT('msg_db.qihua_appmessage',t.CompID % 10),TIMESTAMPDIFF(DAY, DATE_FORMAT(NOW(),'%Y-%m-%d'), DATE_FORMAT(t.EndTime,'%Y-%m-%d')),t.Compname FROM boss_db.qihua_company t WHERE TIMESTAMPDIFF(DAY, NOW(), t.EndTime) <= 15 AND TIMESTAMPDIFF(DAY, NOW(), t.EndTime) > 0 AND TIMESTAMPDIFF(DAY, NOW(), t.EndTime) != 0 AND (t.Status = 0 OR t.Status = 4);
+  DECLARE CONTINUE HANDLER FOR SQLSTATE '02000'  SET Done=1;
+   OPEN  cursor_data;
+						        	-- WHILE COUNTT=0 DO
+									myLoop: LOOP 
+											FETCH  cursor_data INTO compid,table_name,days,compname;  
+                      IF  Done=1 THEN  
+											LEAVE myLoop;
+											END IF ;			
+											select Done;
+                        -- SELECT compid,table_num,days;
+												/*set test = test +1;*/
+											 SELECT  u.UserID,u.Account,u.`Name`,CONCAT(u.`Name`,'，您好,',compname,days,'之后到期，请尽快安排办理该账户延期申请事宜，到期后系统将自动停止该账户使用权限，请悉知。')  describes,u.CompID INTO @USERID,@ACCOUNT,@NAME,@DESCRIBES,@COMPID FROM core_db.qihua_companyadmin t JOIN comp_db.qihua_userinfo u on t.Mobile=u.Mobile  AND u.CompID =compid  and u.Deleted=0 WHERE t.CompID=compid;set done=0;
+                       SELECT  COUNT(*)   INTO @COUNT FROM core_db.qihua_companyadmin t JOIN comp_db.qihua_userinfo u on t.Mobile=u.Mobile and u.Deleted=0  AND u.CompID =compid WHERE t.CompID=compid; set done=0;
+									             IF @COUNT>0  THEN
+															     SET @table_name=CONCAT('INSERT INTO ',table_name,'(userid,compid,fromacc ,fromname,msgdesc ,servtype ,scanflag ,msgtime )VALUES(@USERID,@COMPID,@ACCOUNT,@NAME,@DESCRIBES,0,0,NOW());');
+																			-- SELECT @table_name;
+
+																				INSERT INTO comp_db.qihua_usermessage(msgtype,rangtype,rangeid,contenttype,msgcontent,pushcontent,noaccount,fromid,scanflag,pushflag,CreateTime) VALUES(0,0,@USERID,'message/appmsg','<message><appmsg>1</appmsg></message>','','',0,0,0,now());																
+			                                  PREPARE stmt  from @table_name;
+																			   EXECUTE stmt   ;
+																		-- SELECT @table_name;
+																END IF;
+									
+                   --    SELECT  u.UserID,u.Account,u.`Name`,CONCAT(u.`Name`,'，您好，北京平治东方科技股份有限公司企业账户将在天',days,'之后到期，请尽快安排办理该账户延期申请事宜，到期后系统将自动停止该账户使用权限，请悉知。')  describes,u.CompID INTO @USERID,@ACCOUNT,@NAME,@DESCRIBES,@COMPID FROM core_db.qihua_companyadmin t JOIN comp_db.qihua_userinfo u on t.Mobile=u.Mobile  AND u.CompID =compid  and u.Deleted=0 WHERE t.CompID=compid;
+                      --  SELECT  COUNT(*)   INTO @COUNTS FROM core_db.qihua_companyadmin t JOIN comp_db.qihua_userinfo u on t.Mobile=u.Mobile and u.Deleted=0  AND u.CompID =compid WHERE t.CompID=compid;
+															   -- IF @COUNTS>0  THEN
+																	-- 	SET @table_name=CONCAT('INSERT INTO ',table_name,'(userid,compid,fromacc ,fromname,msgdesc ,servtype ,scanflag ,msgtime )VALUES(@USERIDS,@COMPIDS,@ACCOUNTS,@NAMES,@DESCRIBESS,0,0,NOW());');
+																			-- 
+																		 	-- 	INSERT INTO comp_db.qihua_usermessage(msgtype,rangtype,rangeid,contenttype,msgcontent,pushcontent,noaccount,fromid,scanflag,pushflag,CreateTime) VALUES(0,0,@USERIDS,'message/appmsg','<message><appmsg>1</appmsg></message>','','',0,0,0,now());														
+                           					   --  PREPARE stmt from @table_name;
+																			  -- EXECUTE stmt;
+															-- 	END IF;	
+											
+													
+														
+						              
+												-- 	IF COUNTT=s THEN
+							                   --  	SELECT s;
+															-- 				SET s=1;
+													
+													-- END IF;	
+                           
+														-- SET  	COUNT=COUNT+1;
+														
+													 end loop ;			
+                          --  END WHILE;
+
+												-- set table_name=compid;
+           
+		CLOSE cursor_data;
+
+
+END

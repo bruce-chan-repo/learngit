@@ -1,0 +1,76 @@
+--计算需要新增的职级
+SELECT * FROM `qihua_import_assist` a
+WHERE	NOT EXISTS(
+	SELECT
+		1
+	FROM
+		qihua_leveldict b
+	WHERE 
+		b.compid = 100142
+	AND 
+		a.`level` = b.levelName
+)
+AND a.compId = 100142;
+
+--计算新增的用户
+SELECT 
+	*
+FROM
+(
+	SELECT
+		*
+	FROM
+		`qihua_import_assist` a
+	WHERE
+		NOT EXISTS (
+			SELECT
+				1
+			FROM
+				qihua_userinfo u
+			WHERE
+				u.CompID = 100142
+			AND a.mobile = u.mobile
+			AND u.deleted = 0
+		)
+	AND compId = 100142
+	ORDER BY `order` DESC
+) temp
+GROUP BY mobile;
+
+--计算需要修改的用户
+SELECT * FROM `qihua_import_assist` a
+WHERE EXISTS(
+	SELECT	
+		1
+	FROM
+		qihua_userinfo u
+	WHERE 
+		a.mobile = u.mobile
+	AND compId = 100142
+	AND u.deleted = 0
+	AND(
+		u.`Name` != a.`name`
+		OR
+		u.Gender != (CASE a.gender WHEN '男' THEN 0 WHEN '女' THEN 1 ELSE 2 END)
+		OR
+		u.Position != a.position
+		OR
+		u.Phone1 != a.phone2
+		OR	
+		u.PhoneExt != a.phoneExt
+		OR
+		u.Phone3 != a.telephone
+		OR
+		u.phone2 != a.officePhone
+		OR
+		u.Email != a.email
+		OR
+		(SELECT LevelName FROM qihua_leveldict WHERE compId = 100142 AND LevelID = u.LevelID) != a.`level`
+		OR
+		u.UserState != (CASE a.isLogin WHEN '是' THEN 0 ELSE 1 END)
+	)
+)
+AND compId = 100142;
+
+
+

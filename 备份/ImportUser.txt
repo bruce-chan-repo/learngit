@@ -1,0 +1,339 @@
+BEGIN
+	## 处理自服务导入人员问题.
+	DECLARE i int DEFAULT 0;																		
+	DECLARE exeSql text DEFAULT "";						-- 批量执行的sql
+	DECLARE exeValues text DEFAULT "";				-- 批量执行的values
+	DECLARE delPhoneVisVal text DEFAULT "";		-- 删除联系方式可见性值
+	DECLARE delPhoneVisSql text DEFAULT "";		-- 删除联系方式可见性语句
+	DECLARE addPhoneVisVal text DEFAULT "";		-- 删除联系方式可见性值
+	DECLARE addPhoneVisSql text DEFAULT "";		-- 删除联系方式可见性语句
+	
+	-- 定义用户信息变量
+	DECLARE temp_compId VARCHAR(8); 
+	DECLARE temp_name VARCHAR(156);
+	DECLARE temp_mobile VARCHAR(128);
+	DECLARE temp_password VARCHAR(36);
+	DECLARE temp_fullSpell VARCHAR(36);
+	DECLARE temp_initSpell VARCHAR(36);
+	DECLARE temp_gender INT;
+	DECLARE temp_position VARCHAR(156);
+	DECLARE temp_phone2 VARCHAR(20);
+	DECLARE temp_phoneExc VARCHAR(20);
+	DECLARE temp_telePhone VARCHAR(20);
+	DECLARE temp_officePhone VARCHAR(20);
+	DECLARE temp_email VARCHAR(56);
+	DECLARE temp_levelId VARCHAR(8);
+	DECLARE temp_isLogin INT;
+	DECLARE temp_accout VARCHAR(20);
+	DECLARE temp_deptId VARCHAR(20);
+	DECLARE temp_userId VARCHAR(20);
+	DECLARE temp_phoneVisable VARCHAR(5);
+	
+	DECLARE done int default FALSE;		 	 		-- 游标结束标识
+
+	-- 创建游标，用来遍历创建需添加用户的结果集
+	DECLARE cur1 CURSOR 								 
+	FOR 
+	SELECT
+		compId,
+		`NAME`,
+		mobile,
+		`password`,
+		fullSpell,
+		initSpell,
+		CASE gender WHEN '男' THEN 0 WHEN '女' THEN 1 ELSE 2 END gender,
+		position,
+		phone2,
+		phoneExt,
+		telePhone,
+		officePhone,
+		email,
+		CASE `level` WHEN '' THEN 0 WHEN NULL THEN 0 ELSE `level` END as `level`,
+		CASE isLogin WHEN '是' THEN 0 WHEN '否' THEN 1 ELSE 1 END isLogin,
+		phoneVisiable
+	FROM
+		(
+			SELECT 
+				*
+			FROM
+			(
+				SELECT
+					compId,`NAME`,mobile,`password`,fullSpell,initSpell,gender,position,phone2,phoneExt,telePhone,officePhone,email,`level`,isLogin, phoneVisiable
+				FROM
+					qihua_import_assist s
+				WHERE
+					s.compId = compId
+				ORDER BY `order` DESC
+			) temp
+			GROUP BY temp.mobile
+			UNION ALL
+			SELECT
+				CompID,`Name`,mobile,`Password`,FullSpell,InitSpell,Gender,Position,phone1,PhoneExt,phone3,phone2,email,LevelID,UserState, "" as phoneVisiable
+			FROM
+				qihua_userinfo u
+			WHERE
+				u.compId = compId
+			AND Deleted = 0
+		) t
+	GROUP BY
+		mobile
+	HAVING
+		COUNT(1) = 1;
+
+	-- 创建游标，用来遍历需要添加的用户部门关系信息
+	DECLARE cur2 CURSOR 								 
+	FOR 
+	SELECT
+		deptId,userId,position
+	FROM
+		qihua_import_assist q
+	WHERE
+		q.compId = compId
+	GROUP BY
+		deptId,
+		userId;
+
+	-- 创建游标，用来遍历需要排序的部门
+	DECLARE cur3 CURSOR 								 
+	FOR
+	SELECT
+		deptId
+	FROM
+		qihua_import_assist a
+	WHERE
+		a.compId = compId
+	GROUP BY
+		deptId;
+	
+	-- DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;  
+	DECLARE CONTINUE HANDLER FOR SQLSTATE '02000' SET done = TRUE;
+
+	-- --------------------------------- 用户信息处理 ----------------------------------------
+	-- 修改用户信息
+	UPDATE qihua_userinfo u
+	INNER JOIN(
+		SELECT 
+			*
+		FROM
+		(
+			SELECT
+				compId,
+				`NAME`,
+				mobile,
+				`password`,
+				fullSpell,
+				initSpell,
+				CASE gender WHEN '男' THEN 0 WHEN '女' THEN 1 ELSE 2 END gender,
+				position,
+				phone2,
+				phoneExt,
+				telePhone,
+				officePhone,
+				email,
+				CASE `level` WHEN '' THEN 0 WHEN NULL THEN 0 ELSE `level` END as `level`,
+				CASE isLogin WHEN '是' THEN 0 WHEN '否' THEN 1 ELSE 1 END isLogin
+			FROM
+				qihua_import_assist s
+			WHERE
+				s.compId = 100333
+			ORDER BY `order` DESC
+		) temp
+		GROUP BY temp.mobile
+	) t
+	ON u.compId = t.compId AND u.mobile = t.mobile
+	SET u.name = t.name,
+			u.gender = t.gender,
+			u.fullSpell = t.fullSpell,
+			u.initSpell = t.initSpell,
+			u.phone1 = t.phone2,
+			u.phoneExt = t.phoneExt,
+			u.phone3 = t.telePhone,
+			u.phone2 = t.officePhone,
+			u.email = t.email,
+			u.levelId = t.level
+	WHERE u.deleted = 0;
+	
+	-- 添加用户信息
+	OPEN cur1;			
+		read_loop : LOOP
+			-- 抓取该行数据
+			FETCH cur1 INTO temp_compId, temp_name, temp_mobile, temp_password, temp_fullSpell, temp_initSpell, 
+											temp_gender, temp_position, temp_phone2, temp_phoneExc, temp_telePhone, temp_officePhone, 
+											 temp_email, temp_levelId, temp_isLogin, temp_phoneVisable;
+			
+			-- 跳出游标循环
+			IF done THEN
+				LEAVE read_loop;
+			END IF;
+
+			-- 递增i值
+			SET i = i + 1;
+			
+			-- 生成随机账号
+		  SELECT CEILING(RAND() * 50000000000 + 50000000000) INTO temp_accout;
+
+			-- 构建values
+			SET exeValues = CONCAT(exeValues, ",(", temp_compId, ",'", CONCAT(temp_accout, compId), "','", temp_name, "','", temp_mobile, "','", 
+														temp_password, "','" , temp_fullSpell, "','", temp_initSpell, "',", temp_gender, ",'", temp_position, "','", 
+														temp_phone2, "','", temp_phoneExc, "','", temp_telePhone, "','", temp_officePhone, "','", temp_email, "',", 
+														temp_levelId, ",", temp_isLogin, ",'", NOW(), "','", NOW(), "')");
+			
+			-- 处理联系方式保密
+			IF temp_phoneVisable = "是" THEN 
+				SET delPhoneVisVal = CONCAT(",", temp_phoneVisable);
+			ELSEIF temp_phoneVisable = "否" THEN
+				
+			END IF;
+			
+			-- 每150条入库一次
+			IF (i % 150) = 0 THEN
+				IF LENGTH(exeValues) > 0 THEN
+					SET @exeValues = SUBSTRING(exeValues, 2);
+					SET @exeSql = CONCAT("INSERT INTO qihua_userinfo(compId, account, name, mobile, password, fullSpell, initSpell, gender, position, phone1, phoneExt, phone3, phone2, email, levelId, userState, createTime, updateTime) VALUES ", @exeValues);
+				
+					-- 执行批量添加用户
+					PREPARE stmt FROM @exeSql;
+					EXECUTE stmt;
+					DEALLOCATE PREPARE stmt;
+
+					SET exeValues = "";
+				END IF;	
+			END IF;
+		END LOOP;
+	CLOSE cur1;
+
+	-- 重置游标跳出变量
+	SET done = FALSE;
+	
+	-- 如果有剩余没有执行语句
+	IF LENGTH(exeValues) > 0 THEN
+		SET @exeValues = SUBSTRING(exeValues, 2);
+		SET @exeSql = CONCAT("INSERT INTO qihua_userinfo(compId, account, name, mobile, password, fullSpell, initSpell, gender, position, phone1, phoneExt, phone3, phone2, email, levelId, userState, createTime, updateTime) VALUES ", @exeValues);
+	
+		-- 执行批量添加用户
+		PREPARE stmt FROM @exeSql;
+		EXECUTE stmt;
+    DEALLOCATE PREPARE stmt;
+
+		SET exeValues = "";
+		SET exeSql = "";
+	END IF;
+	
+	-- 将所有新添加的人员编号同步到中间表
+	UPDATE qihua_import_assist a
+	INNER JOIN (
+		SELECT
+			userid,
+			mobile
+		FROM
+			qihua_userinfo u
+		WHERE
+			u.compId = compId
+	) b ON a.mobile = b.mobile
+	SET a.userId = b.userid
+	WHERE
+		a.compId = compId;
+
+	-- --------------------------------- 用户部门中间表（兼任）处理 ----------------------------------------
+	SET i = 0;
+	-- 假删本次导入用户的所有任职信息
+	UPDATE qihua_employees a
+	INNER JOIN (
+		SELECT compId, userId FROM qihua_import_assist b WHERE b.compId = compId GROUP BY userId
+	) c
+	ON a.compId = c.compId AND a.userId = c.userId
+	SET a.Deleted = 1;
+	
+	-- 获取部门中最大排序编号值
+	SELECT MAX(sortOrder) INTO @maxSortOrder FROM qihua_employees e WHERE e.compId = compId;
+	IF @maxSortOrder IS NULL THEN
+		SET @maxSortOrder = 0;
+	END IF;
+
+	-- 添加部门人员中间表信息
+	OPEN cur2;			
+		read_loop : LOOP
+			FETCH cur2 INTO temp_deptId, temp_userId, temp_position;
+	
+			-- 跳出游标循环
+			IF done THEN
+				LEAVE read_loop;
+			END IF;
+
+			SET i = i + 1;
+			SET @maxSortOrder = @maxSortOrder + 1;
+
+			SET exeValues = CONCAT(exeValues, ",(", compId, ",", temp_deptId, ",", temp_userId, ",", @maxSortOrder, ", 0, '", NOW(), "','", NOW(), "', 0,'", temp_position, "')");
+			
+			-- 每150条入库一次
+			IF (i % 150) = 0 THEN
+				IF LENGTH(exeValues) > 0 THEN
+					SET @exeValues = SUBSTRING(exeValues, 2);
+					SET @exeSql = CONCAT("INSERT INTO qihua_employees(compId, deptID, userId, sortOrder, deleted, createTime, updateTime, FirstDept, job) VALUES", @exeValues);
+				
+					-- 执行批量添加用户
+					PREPARE stmt FROM @exeSql;
+					EXECUTE stmt;
+					DEALLOCATE PREPARE stmt;
+
+					SET exeValues = "";
+				END IF;
+			END IF;
+			
+		END LOOP;
+	CLOSE cur2;
+
+	-- 剩余的没有执行的语句
+	IF LENGTH(exeValues) > 0 THEN
+		SET @exeValues = SUBSTRING(exeValues, 2);
+		SET @exeSql = CONCAT("INSERT INTO qihua_employees(compId, deptID, userId, sortOrder, deleted, createTime, updateTime, FirstDept, job) VALUES", @exeValues);
+	
+		-- 执行批量添加用户
+		PREPARE stmt FROM @exeSql;
+		EXECUTE stmt;
+		DEALLOCATE PREPARE stmt;
+
+		SET exeValues = "";
+	END IF;
+
+	-- 重排序每个部门下的人员的顺序
+	SET done = FALSE;
+	OPEN cur3;			
+		read_loop : LOOP
+			FETCH cur3 INTO temp_deptId;
+
+			-- 跳出游标循环
+			IF done THEN
+				LEAVE read_loop;
+			END IF;
+			
+			UPDATE qihua_employees e1
+			INNER JOIN (
+				SELECT
+					@rownum := @rownum + 1 rownum,
+					e.*
+				FROM
+					(
+						SELECT
+							@rownum := 0,
+							ID,
+							SortOrder
+						FROM
+							qihua_employees e
+						WHERE
+							e.DeptID = temp_deptId
+						AND Deleted = 0
+						ORDER BY
+							SortOrder
+					) e
+			) e2 ON e1.ID = e2.ID
+			SET e1.SortOrder = e2.rownum;
+		END LOOP;
+	CLOSE cur3;
+
+	-- --------------------------------- 处理联系方式可见性 ----------------------------------------
+
+	
+
+	SELECT "处理完毕";
+END
